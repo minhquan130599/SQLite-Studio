@@ -340,4 +340,4 @@ async def api_export_database(db_name: str, username: str = Depends(get_current_
 
 if __name__ == '__main__':
     print("Starting Premium SQLite Studio with FastAPI...")
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
