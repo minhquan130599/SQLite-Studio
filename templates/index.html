@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQLite Studio - Premium</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --surface-color: rgba(30, 33, 48, 0.7);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --primary-accent: #6b21a8;
+            --secondary-accent: #2563eb;
+            --warning: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger: #e11d48;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(107, 33, 168, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(37, 99, 235, 0.15), transparent 25%);
+            background-size: cover;
+        }
+
+        /* --- Auth Overlay --- */
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 17, 26, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 10000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .auth-box {
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 24px;
+            padding: 40px;
+            width: 400px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .auth-logo {
+            font-size: 48px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .auth-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 24px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 4px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .auth-tab.active {
+            background: var(--surface-color);
+            color: var(--text-main);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            color: var(--text-main);
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .auth-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 8px;
+        }
+
+        .auth-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        /* --- App Container & Layout --- */
+        .app-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .sidebar {
+            width: 280px;
+            min-width: 200px;
+            max-width: 600px;
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Resizers */
+        .resizer {
+            width: 4px;
+            background: var(--surface-border);
+            cursor: col-resize;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .resizer:hover,
+        .resizer.dragging {
+            background: var(--primary-accent);
+            width: 6px;
+            margin: 0 -1px;
+        }
+
+        .resizer-h {
+            height: 4px;
+            background: var(--surface-border);
+            cursor: row-resize;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            z-index: 10;
+            margin: 16px 0;
+        }
+
+        .resizer-h:hover,
+        .resizer-h.dragging {
+            background: var(--primary-accent);
+            height: 6px;
+            margin: 15px 0;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Sidebar items */
+        .logo-area {
+            padding: 24px;
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-section {
+            padding: 16px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            word-break: break-all;
+        }
+
+        .list-item:hover,
+        .list-item.active {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            transform: translateX(4px);
+        }
+
+        .list-item.active {
+            border-left: 3px solid #8b5cf6;
+            background: linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);
+        }
+
+        .sidebar-actions {
+            padding: 16px;
+            border-top: 1px solid var(--surface-border);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Buttons */
+        .btn-small {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--surface-border);
+            color: var(--text-muted);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-small:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        /* User Profile Area */
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .user-info {
+            flex-grow: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-logout {
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+            background: none;
+            border: none;
+            font-size: 16px;
+        }
+
+        .user-logout:hover {
+            color: var(--danger);
+        }
+
+        /* Main Content Header & Area */
+        .header {
+            height: 70px;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--surface-border);
+            background: rgba(15, 17, 26, 0.8);
+            backdrop-filter: blur(12px);
+        }
+
+        .breadcrumb {
+            font-size: 16px;
+            font-weight: 500;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .breadcrumb span {
+            color: var(--text-muted);
+        }
+
+        .breadcrumb .current {
+            color: var(--text-main);
+            background: linear-gradient(135deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+
+        .content-area {
+            flex-grow: 1;
+            padding: 32px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        #workspace-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .query-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .query-panel {
+            flex-shrink: 0;
+            height: 250px;
+            min-height: 150px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .results-panel {
+            flex: 1;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        textarea {
+            flex-grow: 1;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            padding: 16px;
+            color: #d8b4fe;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            resize: none;
+            transition: border-color 0.3s;
+            margin-bottom: 12px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 600;
+            border-bottom: 2px solid var(--surface-border);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            white-space: nowrap;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .table-container {
+            flex-grow: 1;
+            overflow: auto;
+            border-radius: 12px;
+            border: 1px solid var(--surface-border);
+            background: rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        td.edited-cell {
+            background: rgba(245, 158, 11, 0.15) !important;
+            border-left: 2px solid var(--warning);
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Inline Input */
+        .inline-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--secondary-accent);
+            color: var(--text-main);
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 100%;
+            min-width: 100px;
+            font-family: inherit;
+        }
+
+        .inline-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+        }
+
+        /* Drag & Drop */
+        .drop-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(139, 92, 246, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .drop-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drop-overlay i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: bounce 1s infinite alternate;
+        }
+
+        @keyframes bounce {
+            from {
+                transform: translateY(0);
+            }
+
+            to {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* States */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            margin: auto;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            opacity: 0.5;
+        }
+
+        .error-message {
+            background: rgba(225, 29, 72, 0.1);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(225, 29, 72, 0.3);
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .success-message {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            margin: 0 4px;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .action-btn.edit:hover {
+            color: var(--secondary-accent);
+        }
+
+        .action-btn.delete:hover {
+            color: var(--danger);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            width: 500px;
+            max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header,
+        .modal-footer {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--surface-border);
+            border-bottom: none;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--surface-border);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--surface-border);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Auth Overlay -->
+    <div class="auth-overlay" id="auth-overlay">
+        <div class="auth-box">
+            <div class="auth-logo"><i class="fa-solid fa-server"></i></div>
+            <div class="auth-title">SQLite Studio</div>
+            <div class="auth-subtitle">Đăng nhập để quản lý CSDL của riêng bạn</div>
+
+            <div class="auth-tabs">
+                <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Đăng nhập</div>
+                <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Đăng ký</div>
+            </div>
+
+            <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
+                <input type="text" id="auth-username" class="auth-input" placeholder="Tên đăng nhập" required
+                    autocomplete="username">
+                <input type="password" id="auth-password" class="auth-input" placeholder="Mật khẩu" required
+                    autocomplete="current-password">
+                <button type="submit" class="auth-btn" id="auth-submit">Đăng nhập</button>
+                <div id="auth-error" style="color: var(--danger); font-size: 14px; margin-top: 8px; display: none;">Lỗi
+                    xảy ra</div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Drag & Drop Overlay -->
+    <div class="drop-overlay" id="drop-overlay"><i class="fa-solid fa-cloud-arrow-up"></i><span>Thả file Database vào
+            đây để tải lên</span></div>
+
+    <!-- Main App -->
+    <div class="app-container" id="app-container" style="display: none;">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="logo-area">
+                <i class="fa-solid fa-server logo-icon"></i>
+                <div class="logo-text">SQLite Studio</div>
+            </div>
+
+            <div style="padding: 16px; border-bottom: 1px solid var(--surface-border);">
+                <div class="user-profile">
+                    <div class="user-avatar" id="avatar-letter">U</div>
+                    <div class="user-info">
+                        <div class="user-name" id="display-username">Username</div>
+                    </div>
+                    <button class="user-logout" onclick="logout()" title="Đăng xuất"><i
+                            class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Databases</span>
+                    <button onclick="fetchDatabases()" class="btn-small" style="padding: 4px 8px;"><i
+                            class="fa-solid fa-rotate-right"></i></button>
+                </div>
+                <ul class="db-list" id="db-list"></ul>
+            </div>
+
+            <div class="sidebar-section" id="table-section"
+                style="display: none; border-top: 1px solid var(--surface-border);">
+                <div class="section-title">
+                    <span>Tables <span id="current-db-label"
+                            style="text-transform:none; color: var(--primary-accent);"></span></span>
+                    <button onclick="fetchTables()" class="btn-small" style="padding: 4px 8px;"><i
+                            class="fa-solid fa-rotate-right"></i></button>
+                </div>
+                <ul class="table-list" id="table-list"></ul>
+            </div>
+
+            <div class="sidebar-actions">
+                <button class="btn-small" onclick="focusQuery()"><i class="fa-solid fa-plus"></i> New Query</button>
+            </div>
+        </div>
+
+        <div class="resizer" id="sidebar-resizer"></div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <div class="breadcrumb" id="breadcrumb">
+                    <span><i class="fa-solid fa-home"></i></span><span>/</span><span class="current">Select a
+                        Database</span>
+                </div>
+                <div id="header-actions" style="display: none;">
+                    <button class="btn-small" onclick="deleteDatabase()"
+                        style="color: var(--danger); background: rgba(225, 29, 72, 0.1); border-color: rgba(225, 29, 72, 0.3); margin-right: 8px;">
+                        <i class="fa-solid fa-trash"></i> Xóa DB
+                    </button>
+                    <button class="btn-small" onclick="downloadDatabase()"
+                        style="color: var(--text-main); background: rgba(139, 92, 246, 0.2); border-color: var(--primary-accent);">
+                        <i class="fa-solid fa-download"></i> Tải file DB xuống
+                    </button>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div id="error-alert" class="error-message"></div>
+                <div id="success-alert" class="success-message"></div>
+
+                <div class="glass-panel" id="welcome-panel" style="margin: auto; margin-top: 60px;">
+                    <div class="empty-state">
+                        <i class="fa-solid fa-database"></i>
+                        <h3>Chào mừng đến với không gian làm việc</h3>
+                        <p>Kéo thả file .db vào đây để tải lên thư mục riêng của bạn.</p>
+                    </div>
+                </div>
+
+                <div id="workspace-panel" style="display: none;">
+                    <!-- Query Panel -->
+                    <div class="glass-panel query-panel" id="query-panel">
+                        <div
+                            style="font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <i class="fa-solid fa-bolt" style="color: #fbbf24;"></i> Trình chạy SQL
+                        </div>
+                        <textarea id="sql-input" placeholder="SELECT * FROM table_name LIMIT 100"
+                            spellcheck="false"></textarea>
+                        <button class="btn" id="run-btn" onclick="runQuery()"><i class="fa-solid fa-play"></i> Chạy
+                            Query (Ctrl+Enter)</button>
+                    </div>
+
+                    <div class="resizer-h" id="ws-resizer"></div>
+
+                    <!-- Results Panel -->
+                    <div class="glass-panel results-panel" id="results-panel">
+                        <div
+                            style="font-weight: 600; font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
+                            <div>
+                                <span style="display:inline-flex; align-items:center;">
+                                    <i class="fa-solid fa-table" style="color: #3b82f6; margin-right: 8px;"></i> Kết quả
+                                    <button class="btn-small" style="margin-left: 16px;" onclick="refreshTable()"><i
+                                            class="fa-solid fa-rotate-right"></i> Làm mới</button>
+                                    <button id="add-row-btn" class="btn-small" style="margin-left: 8px; display: none;"
+                                        onclick="openAddRowModal()"><i class="fa-solid fa-plus"></i> Thêm</button>
+                                    <button id="save-edits-btn" class="btn-small"
+                                        style="margin-left: 8px; display: none; color: var(--success); border-color: rgba(16, 185, 129, 0.3);"
+                                        onclick="commitEdits()"><i class="fa-solid fa-save"></i> Lưu Data (<span
+                                            id="edit-count">0</span>)</button>
+                                    <button id="delete-selected-btn" class="btn-small"
+                                        style="margin-left: 8px; display: none; color: var(--danger); border-color: rgba(225, 29, 72, 0.3);"
+                                        onclick="deleteSelectedRows()"><i class="fa-solid fa-trash"></i> Xóa (<span
+                                            id="selected-count">0</span>)</button>
+                                </span>
+                            </div>
+                            <span id="results-count"
+                                style="font-size: 13px; color: var(--text-muted); font-weight: 400;"></span>
+                        </div>
+                        <div class="table-container" id="results-container">
+                            <div class="empty-state" style="margin-top:20px;">
+                                <p>Không có dữ liệu hiển thị.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Custom Add/Edit -->
+    <div class="modal-overlay" id="row-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span id="modal-title">Thêm dòng mới</span>
+                <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" id="modal-form"></div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeModal()">Hủy</button>
+                <button class="btn" onclick="saveModalRow()" id="modal-save-btn">Lưu thay đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        /*********** AUTHENTICATION LOGIC ***********/
+        let currentAuthMode = 'login';
+
+        function switchAuthTab(mode) {
+            currentAuthMode = mode;
+            document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+            document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+            document.getElementById('auth-submit').textContent = mode === 'login' ? 'Đăng nhập' : 'Đăng ký';
+            document.getElementById('auth-error').style.display = 'none';
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const user = document.getElementById('auth-username').value.trim();
+            const pass = document.getElementById('auth-password').value;
+            const btn = document.getElementById('auth-submit');
+            const errDiv = document.getElementById('auth-error');
+
+            btn.disabled = true; btn.textContent = 'Đang xử lý...'; errDiv.style.display = 'none';
+
+            try {
+                if (currentAuthMode === 'register') {
+                    const res = await fetch('/api/register', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: user, password: pass })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Đăng ký thất bại");
+
+                    // Auto login after register
+                    currentAuthMode = 'login';
+                    return handleAuth(e);
+                } else {
+                    const res = await fetch('/api/login', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: user, password: pass })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Đăng nhập thất bại");
+
+                    localStorage.setItem('sqlite_token', data.access_token);
+                    localStorage.setItem('sqlite_user', data.username);
+                    initApp();
+                }
+            } catch (err) {
+                errDiv.textContent = err.message;
+                errDiv.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = currentAuthMode === 'login' ? 'Đăng nhập' : 'Đăng ký';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('sqlite_token');
+            localStorage.removeItem('sqlite_user');
+            location.reload();
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('sqlite_token');
+            if (!options.headers) options.headers = {};
+            if (token) options.headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                localStorage.removeItem('sqlite_token');
+                document.getElementById('auth-overlay').style.display = 'flex';
+                document.getElementById('app-container').style.display = 'none';
+                throw new Error("Unauthorized");
+            }
+            return res;
+        }
+
+        function initApp() {
+            const token = localStorage.getItem('sqlite_token');
+            if (!token) {
+                document.getElementById('auth-overlay').style.display = 'flex';
+                document.getElementById('app-container').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+
+            const user = localStorage.getItem('sqlite_user') || 'User';
+            document.getElementById('display-username').textContent = user;
+            document.getElementById('avatar-letter').textContent = user.charAt(0).toUpperCase();
+
+            fetchDatabases();
+            initResizers();
+        }
+
+        /*********** RESIZER LOGIC ***********/
+        function initResizers() {
+            // Sidebar resizer
+            const sidebar = document.getElementById('sidebar');
+            const resizerV = document.getElementById('sidebar-resizer');
+            let isResizingV = false;
+
+            resizerV.addEventListener('mousedown', (e) => {
+                isResizingV = true;
+                resizerV.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none'; // prevent text selection
+            });
+
+            // Workspace horizontal resizer
+            const queryPanel = document.getElementById('query-panel');
+            const resizerH = document.getElementById('ws-resizer');
+            let isResizingH = false;
+
+            resizerH.addEventListener('mousedown', (e) => {
+                isResizingH = true;
+                resizerH.classList.add('dragging');
+                document.body.style.cursor = 'row-resize';
+                document.body.style.userSelect = 'none';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isResizingV) {
+                    const newWidth = e.clientX;
+                    if (newWidth > 200 && newWidth < Math.min(600, window.innerWidth - 300)) {
+                        sidebar.style.width = newWidth + 'px';
+                    }
+                }
+                if (isResizingH) {
+                    // Height based on top bounding client rect
+                    const topOffset = queryPanel.getBoundingClientRect().top;
+                    const newHeight = e.clientY - topOffset;
+                    if (newHeight > 150 && newHeight < window.innerHeight - 200) {
+                        queryPanel.style.height = newHeight + 'px';
+                    }
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizingV) {
+                    isResizingV = false;
+                    resizerV.classList.remove('dragging');
+                }
+                if (isResizingH) {
+                    isResizingH = false;
+                    resizerH.classList.remove('dragging');
+                }
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+            });
+        }
+
+        /*********** DB LOGIC ***********/
+        let currentDb = null;
+        let currentTable = null;
+        let currentColumns = [];
+        let pendingEdits = {}; // Buffer for edits
+        let currentRowIdModal = null; // for the modal only
+
+        document.getElementById('sql-input').addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runQuery();
+        });
+
+        async function fetchDatabases() {
+            try {
+                document.getElementById('db-list').innerHTML = '<li class="loading"><i class="fa-solid fa-spinner fa-spin"></i></li>';
+                const res = await fetchWithAuth('/api/databases');
+                const data = await res.json();
+
+                const ul = document.getElementById('db-list');
+                ul.innerHTML = '';
+                if (data.databases && data.databases.length > 0) {
+                    data.databases.forEach(db => {
+                        const li = document.createElement('li');
+                        li.className = 'list-item'; if (currentDb === db) li.classList.add('active');
+                        li.innerHTML = `<i class="fa-solid fa-database"></i> ${escapeHtml(db)}`;
+                        li.onclick = () => selectDatabase(db, li);
+                        ul.appendChild(li);
+                    });
+                } else {
+                    ul.innerHTML = '<li style="color:var(--text-muted); padding:10px 14px; text-align:center; font-size:13px;">Thư mục của bạn đang trống.</li>';
+                }
+            } catch (err) {
+                if (err.message !== "Unauthorized") showError('Lỗi tải danh sách DB: ' + err.message);
+            }
+        }
+
+        async function selectDatabase(dbName, element) {
+            currentDb = dbName; currentTable = null;
+            document.querySelectorAll('.db-list .list-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+            else {
+                // Find and activate
+                document.querySelectorAll('.db-list .list-item').forEach(el => {
+                    if (el.textContent.trim() === dbName) el.classList.add('active');
+                });
+            }
+
+            document.getElementById('welcome-panel').style.display = 'none';
+            document.getElementById('workspace-panel').style.display = 'flex';
+            document.getElementById('table-section').style.display = 'block';
+            document.getElementById('header-actions').style.display = 'block';
+
+            updateBreadcrumb(); clearAlerts();
+            document.getElementById('results-container').innerHTML = '<div class="empty-state"><p>Chọn một bảng hoặc tự chạy truy vấn SQL.</p></div>';
+            document.getElementById('results-count').textContent = '';
+
+            fetchTables();
+        }
+
+        async function fetchTables() {
+            if (!currentDb) return;
+            const ul = document.getElementById('table-list');
+            ul.innerHTML = '<li class="loading"><i class="fa-solid fa-spinner fa-spin"></i></li>';
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/tables`);
+                const data = await res.json();
+                ul.innerHTML = '';
+                if (data.tables && data.tables.length > 0) {
+                    data.tables.forEach(t => {
+                        const li = document.createElement('li'); li.className = 'list-item';
+                        if (currentTable === t) li.classList.add('active');
+                        li.innerHTML = `<i class="fa-solid fa-table"></i> ${escapeHtml(t)}`;
+                        li.onclick = () => selectTable(t, li);
+                        ul.appendChild(li);
+                    });
+                } else ul.innerHTML = '<li style="color:var(--text-muted); padding:10px; text-align:center; font-size:13px;">DB trống</li>';
+            } catch (err) { ul.innerHTML = ''; }
+        }
+
+        function refreshTable() {
+            if (currentTable) {
+                if (Object.keys(pendingEdits).length > 0 && !confirm("Có dữ liệu chưa lưu. Bạn có chắc muốn tải lại bảng?")) return;
+                selectTable(currentTable);
+            } else if (currentDb) {
+                fetchTables();
+            }
+        }
+
+        async function selectTable(table, element) {
+            currentTable = table;
+            document.querySelectorAll('.table-list .list-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+            else {
+                document.querySelectorAll('.table-list .list-item').forEach(el => {
+                    if (el.textContent.trim() === table) el.classList.add('active');
+                });
+            }
+
+            updateBreadcrumb(); clearAlerts();
+            document.getElementById('sql-input').value = `SELECT * FROM "${table}" LIMIT 100`;
+            document.getElementById('results-container').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+            document.getElementById('add-row-btn').style.display = 'none';
+            document.getElementById('delete-selected-btn').style.display = 'none';
+            document.getElementById('save-edits-btn').style.display = 'none';
+            pendingEdits = {}; // reset pending edits
+            updateEditCount();
+
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${table}`);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                currentColumns = data.columns.filter(c => c !== '_rowid_');
+                document.getElementById('add-row-btn').style.display = 'inline-flex';
+                document.getElementById('delete-selected-btn').style.display = 'inline-flex';
+                updateSelectedCount();
+                renderTable(data.columns, data.rows, true);
+            } catch (e) {
+                showError('Tải dữ liệu thất bại: ' + e.message);
+                document.getElementById('results-container').innerHTML = '';
+            }
+        }
+
+        function focusQuery() {
+            document.getElementById('sql-input').focus();
+        }
+
+        async function runQuery() {
+            if (!currentDb) return showError('Chưa chọn DB.');
+            const q = document.getElementById('sql-input').value.trim(); if (!q) return;
+
+            currentTable = null; updateBreadcrumb(); clearAlerts();
+            document.querySelectorAll('.table-list .list-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('add-row-btn').style.display = 'none';
+            document.getElementById('delete-selected-btn').style.display = 'none';
+            document.getElementById('save-edits-btn').style.display = 'none';
+            pendingEdits = {}; updateEditCount();
+
+            const btn = document.getElementById('run-btn'); const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>...';
+            document.getElementById('results-container').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/query`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: q })
+                });
+                const data = await res.json();
+                if (data.error || !res.ok) throw new Error(data.error || data.detail);
+
+                if (data.message) {
+                    showSuccess(data.message);
+                    document.getElementById('results-container').innerHTML = `<div class="empty-state"><i class="fa-solid fa-check" style="color:var(--success)"></i><p>${escapeHtml(data.message)}</p></div>`;
+                    document.getElementById('results-count').textContent = '';
+                    fetchTables();
+                } else {
+                    renderTable(data.columns, data.rows, false);
+                }
+            } catch (e) {
+                showError("Lỗi truy vấn: " + e.message);
+                document.getElementById('results-container').innerHTML = '';
+            } finally { btn.innerHTML = orig; }
+        }
+
+        /*********** INLINE EDITING ***********/
+        function updateEditCount() {
+            const keys = Object.keys(pendingEdits);
+            const count = keys.reduce((acc, rowid) => acc + Object.keys(pendingEdits[rowid]).length, 0);
+            document.getElementById('edit-count').textContent = count;
+
+            const btn = document.getElementById('save-edits-btn');
+            if (currentTable) {
+                btn.style.display = 'inline-flex';
+                btn.style.opacity = count > 0 ? '1' : '0.5';
+                btn.style.pointerEvents = count > 0 ? 'auto' : 'none';
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function commitEdits() {
+            if (Object.keys(pendingEdits).length === 0) return;
+
+            const updates = [];
+            for (const [rowid, cols] of Object.entries(pendingEdits)) {
+                updates.push({ _rowid_: parseInt(rowid), ...cols });
+            }
+
+            const btn = document.getElementById('save-edits-btn');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+            btn.style.pointerEvents = 'none';
+
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${currentTable}/rows/bulk_update`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates })
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.detail || 'Lỗi lưu dữ liệu');
+
+                showSuccess(result.message);
+                pendingEdits = {}; // Clear memory
+
+                // Khôi phục HTML trước để span child element tồn tại lại
+                btn.innerHTML = orig;
+                btn.style.pointerEvents = 'auto';
+
+                updateEditCount();
+
+                // Refresh table to get clean layout and remove yellow borders
+                selectTable(currentTable);
+            } catch (e) {
+                btn.innerHTML = orig;
+                btn.style.pointerEvents = 'auto';
+                showError("Lỗi: " + e.message);
+            }
+        }
+
+        function makeEditable(td, rowid, colName) {
+            // Ngăn dbclick liên tục
+            if (td.querySelector('input')) return;
+
+            const currentVisibleVal = td.dataset.originalValue;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'inline-input';
+            input.value = currentVisibleVal === 'NULL_VALUE_FLAG' ? '' : currentVisibleVal;
+
+            td.innerHTML = '';
+            td.appendChild(input);
+            input.focus();
+
+            const saveInlineDraft = () => {
+                const newVal = input.value;
+                const wasNull = currentVisibleVal === 'NULL_VALUE_FLAG';
+
+                // Check if unchanged from original load state
+                if (newVal === currentVisibleVal || (wasNull && newVal === '')) {
+                    td.innerHTML = formatCellDisplay(currentVisibleVal);
+                    return;
+                }
+
+                // Append to pending edits
+                if (!pendingEdits[rowid]) pendingEdits[rowid] = {};
+                pendingEdits[rowid][colName] = newVal;
+
+                td.classList.add('edited-cell');
+                td.dataset.originalValue = newVal; // Display new value as baseline for next click
+                td.innerHTML = formatCellDisplay(newVal);
+
+                updateEditCount();
+            };
+
+            input.addEventListener('blur', saveInlineDraft);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    td.innerHTML = formatCellDisplay(currentVisibleVal);
+                }
+            });
+        }
+
+        function formatCellDisplay(val) {
+            if (val === 'NULL_VALUE_FLAG' || val === null) {
+                return `<span style="color:#64748b; font-style:italic;">NULL</span>`;
+            } else if (!isNaN(val) && val !== '') {
+                return `<span style="color:#38bdf8;">${escapeHtml(String(val))}</span>`;
+            } else {
+                return escapeHtml(String(val));
+            }
+        }
+
+        function renderTable(columns, rows, isTable = false) {
+            if (!columns || columns.length === 0) {
+                document.getElementById('results-container').innerHTML = '<div class="empty-state"><p>0 columns</p></div>';
+                document.getElementById('results-count').textContent = '0 dòng'; return;
+            }
+
+            document.getElementById('results-count').textContent = `${rows.length} dòng`;
+            const dispCols = columns.filter(c => c !== '_rowid_');
+
+            let html = '<table><thead><tr>';
+            if (isTable) html += `<th style="width:40px; text-align:center;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>`;
+            dispCols.forEach(c => html += `<th>${escapeHtml(c)}</th>`);
+            if (isTable) html += `<th style="width:80px; text-align:right;">Hành động</th>`;
+            html += '</tr></thead><tbody>';
+
+            if (rows.length === 0) {
+                const span = dispCols.length + (isTable ? 2 : 0);
+                html += `<tr><td colspan="${span}" style="text-align:center; padding:30px; color:var(--text-muted)">Không có bản ghi.</td></tr>`;
+            } else {
+                rows.forEach(r => {
+                    html += '<tr>';
+                    if (isTable) html += `<td style="text-align:center;"><input type="checkbox" class="row-checkbox" value="${r['_rowid_']}" onclick="updateSelectedCount()"></td>`;
+
+                    dispCols.forEach(c => {
+                        const val = r[c];
+                        const rowid = r['_rowid_'];
+                        const dataVal = val === null ? 'NULL_VALUE_FLAG' : escapeHtml(String(val));
+
+                        // Nếu là isTable, cho phép double click Edit Inline
+                        if (isTable) {
+                            // Cần escape dblquotes inside dblquotes
+                            const colJs = escapeHtml(c).replace(/'/g, "\\'");
+                            html += `<td data-original-value="${dataVal}" ondblclick="makeEditable(this, ${rowid}, '${colJs}')" title="Nhấp đúp để sửa">${formatCellDisplay(val)}</td>`;
+                        } else {
+                            html += `<td>${formatCellDisplay(val)}</td>`;
+                        }
+                    });
+
+                    if (isTable) {
+                        const rId = r['_rowid_'];
+                        const rowDataJson = escapeHtml(JSON.stringify(r));
+                        html += `<td style="text-align:right; white-space:nowrap;">
+                            <button class="action-btn edit" onclick='openEditRowModal(${rId}, ${rowDataJson})'><i class="fa-solid fa-pen"></i></button>
+                            <button class="action-btn delete" onclick='deleteRow(${rId})'><i class="fa-solid fa-trash"></i></button>
+                        </td>`;
+                    }
+                    html += '</tr>';
+                });
+            }
+            html += '</tbody></table>';
+            document.getElementById('results-container').innerHTML = html;
+        }
+
+        /*********** EXPORT / DELETE DB ***********/
+        async function deleteDatabase() {
+            if (!currentDb) return;
+            if (!confirm(`Bạn có CHẮC CHẮN muốn xóa hoàn toàn file "${currentDb}" khỏi hệ thống? (Hành động này không thể hoàn tác)`)) return;
+
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Xóa thất bại");
+
+                showSuccess(data.message);
+                currentDb = null;
+                currentTable = null;
+                document.getElementById('welcome-panel').style.display = 'block';
+                document.getElementById('workspace-panel').style.display = 'none';
+                document.getElementById('table-section').style.display = 'none';
+                document.getElementById('header-actions').style.display = 'none';
+                updateBreadcrumb();
+                fetchDatabases();
+            } catch (e) {
+                showError("Không thể xóa Database: " + e.message);
+            }
+        }
+
+        async function downloadDatabase() {
+            if (!currentDb) return;
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/export`);
+                if (!res.ok) throw new Error("Thất bại khi tải file");
+
+                // Get Blob and trigger download
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentDb;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                showError("Không thể tải Database: " + e.message);
+            }
+        }
+
+        /*********** BULK DELETE ***********/
+        function toggleSelectAll(src) {
+            document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = src.checked);
+            updateSelectedCount();
+        }
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('.row-checkbox:checked').length;
+            const span = document.getElementById('selected-count');
+            if (span) span.textContent = count;
+            const btn = document.getElementById('delete-selected-btn');
+            if (btn) {
+                btn.style.opacity = count > 0 ? '1' : '0.5';
+                btn.style.pointerEvents = count > 0 ? 'auto' : 'none';
+            }
+
+            const allCb = document.getElementById('select-all');
+            const total = document.querySelectorAll('.row-checkbox').length;
+            if (allCb && total > 0) {
+                allCb.checked = count === total;
+                allCb.indeterminate = count > 0 && count < total;
+            }
+        }
+        async function deleteSelectedRows() {
+            const checks = document.querySelectorAll('.row-checkbox:checked');
+            if (checks.length === 0) return;
+            if (!confirm(`Xóa ${checks.length} dòng đã chọn?`)) return;
+
+            const rowids = Array.from(checks).map(cb => parseInt(cb.value));
+            const btn = document.getElementById('delete-selected-btn');
+            const orig = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Xóa...';
+            btn.style.pointerEvents = 'none';
+
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${currentTable}/rows`, {
+                    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rowids })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Lỗi');
+                showSuccess(data.message);
+                selectTable(currentTable);
+            } catch (e) { showError(e.message); }
+            finally { btn.innerHTML = orig; btn.style.pointerEvents = 'auto'; }
+        }
+
+        /*********** MODAL (Create/Edit) ***********/
+        function openAddRowModal() {
+            currentRowIdModal = null; document.getElementById('modal-title').textContent = "Thêm Dòng";
+            buildModal({}); document.getElementById('row-modal').classList.add('active');
+        }
+        function openEditRowModal(rid, rowData) {
+            currentRowIdModal = rid; document.getElementById('modal-title').textContent = "Sửa: " + rid;
+            buildModal(rowData); document.getElementById('row-modal').classList.add('active');
+        }
+        function buildModal(data) {
+            const f = document.getElementById('modal-form'); f.innerHTML = '';
+            currentColumns.forEach(c => {
+                const g = document.createElement('div'); g.className = 'form-group';
+                g.innerHTML = `<label>${escapeHtml(c)}</label><input type="text" id="m-in-${c}" value="${data[c] !== undefined && data[c] !== null ? escapeHtml(String(data[c])) : ''}">`;
+                f.appendChild(g);
+            });
+        }
+        function closeModal() { document.getElementById('row-modal').classList.remove('active'); }
+        async function saveModalRow() {
+            const payload = {};
+            currentColumns.forEach(c => {
+                const v = document.getElementById('m-in-' + c).value;
+                payload[c] = v === '' ? null : v;
+            });
+            const m = currentRowIdModal ? 'PUT' : 'POST';
+            const u = currentRowIdModal ? `/api/database/${currentDb}/table/${currentTable}/row/${currentRowIdModal}` : `/api/database/${currentDb}/table/${currentTable}/row`;
+
+            try {
+                const res = await fetchWithAuth(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.detail);
+                showSuccess(result.message); closeModal(); selectTable(currentTable);
+            } catch (e) { alert("Lỗi: " + e.message); }
+        }
+        async function deleteRow(id) {
+            if (!confirm(`Xóa dòng ${id}?`)) return;
+            try {
+                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${currentTable}/row/${id}`, { method: 'DELETE' });
+                const out = await res.json();
+                if (!res.ok) throw new Error(out.detail);
+                showSuccess(out.message); selectTable(currentTable);
+            } catch (e) { alert(e.message); }
+        }
+
+        /*********** UPLOAD ***********/
+        const dropOl = document.getElementById('drop-overlay');
+        window.addEventListener('dragover', e => { e.preventDefault(); if (e.dataTransfer.types.includes('Files') && localStorage.getItem('sqlite_token')) dropOl.classList.add('active'); });
+        window.addEventListener('dragleave', e => { e.preventDefault(); if (e.target === dropOl) dropOl.classList.remove('active'); });
+        window.addEventListener('drop', async e => {
+            e.preventDefault(); dropOl.classList.remove('active');
+            if (!localStorage.getItem('sqlite_token')) return;
+
+            const files = e.dataTransfer.files; if (!files.length) return;
+            const file = files[0]; const name = file.name.toLowerCase();
+            if (!name.endsWith('.db') && !name.endsWith('.sqlite') && !name.endsWith('.sqlite3')) return showError('Chỉ chấp nhận file .db, .sqlite');
+
+            const fd = new FormData(); fd.append('file', file);
+            document.getElementById('results-container').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Uploading...</div>';
+
+            try {
+                const res = await fetchWithAuth('/api/upload', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail);
+                showSuccess(data.message);
+                fetchDatabases(); selectDatabase(file.name);
+            } catch (e) { showError("Upload thất bại: " + e.message); }
+        });
+
+        /*********** UTILS ***********/
+        function updateBreadcrumb() {
+            const bb = document.getElementById('breadcrumb');
+            if (currentDb && currentTable) bb.innerHTML = `<span><i class="fa-solid fa-server" style="color:var(--primary-accent)"></i></span><span>/</span><span>${currentDb}</span><span>/</span><span class="current"><i class="fa-solid fa-table"></i> ${currentTable}</span>`;
+            else if (currentDb) bb.innerHTML = `<span><i class="fa-solid fa-server" style="color:var(--primary-accent)"></i></span><span>/</span><span class="current"><i class="fa-solid fa-database"></i> ${currentDb}</span>`;
+            else bb.innerHTML = `<span><i class="fa-solid fa-server" style="color:var(--primary-accent)"></i></span><span>/</span><span class="current">Không có DB</span>`;
+        }
+        function showError(msg) { const a = document.getElementById('error-alert'); a.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(msg)}`; a.style.display = 'block'; document.getElementById('success-alert').style.display = 'none'; }
+        function showSuccess(msg) { const a = document.getElementById('success-alert'); a.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(msg)}`; a.style.display = 'block'; document.getElementById('error-alert').style.display = 'none'; setTimeout(() => a.style.display = 'none', 3000); }
+        function clearAlerts() { document.getElementById('error-alert').style.display = 'none'; document.getElementById('success-alert').style.display = 'none'; }
+        function escapeHtml(u) { if (u === null || u === undefined) return ''; return u.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+
+        // Start
+        initApp();
+    </script>
+</body>
+
+</html>
