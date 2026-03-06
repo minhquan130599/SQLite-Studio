@@ -406,8 +406,9 @@
 
         #workspace-panel {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             height: 100%;
+            overflow: hidden;
         }
 
         .query-section {
@@ -419,19 +420,21 @@
 
         .query-panel {
             flex-shrink: 0;
-            height: 250px;
-            min-height: 150px;
-            max-height: 80vh;
+            width: 33.33%;
+            min-width: 250px;
+            max-width: 80vw;
             display: flex;
             flex-direction: column;
+            height: 100%;
         }
 
         .results-panel {
             flex: 1;
-            min-height: 150px;
+            min-width: 300px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            height: 100%;
         }
 
         textarea {
@@ -849,6 +852,22 @@
                 <div id="workspace-panel" style="display: none;">
                     <!-- Query Panel -->
                     <div class="glass-panel query-panel" id="query-panel">
+                        <!-- AI Text-to-SQL Input -->
+                        <div
+                            style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                            <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;"><i
+                                    class="fa-solid fa-wand-magic-sparkles" style="color: #c084fc;"></i> Tạo SQL bằng AI
+                                (Offline)</div>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="ai-text-input" placeholder="VD: Lấy 10 dòng mới nhất"
+                                    class="inline-input" style="flex-grow: 1; background: rgba(0,0,0,0.2);"
+                                    onkeydown="if(event.key === 'Enter') generateSqlFromText()">
+                                <button class="btn-small" id="ai-gen-btn"
+                                    style="background: var(--primary-accent); color: white; border: none; padding: 0 16px;"
+                                    onclick="generateSqlFromText()">Tạo SQL</button>
+                            </div>
+                        </div>
+
                         <div
                             style="font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                             <i class="fa-solid fa-bolt" style="color: #fbbf24;"></i> Trình chạy SQL
@@ -859,7 +878,7 @@
                             Query (Ctrl+Enter)</button>
                     </div>
 
-                    <div class="resizer-h" id="ws-resizer"></div>
+                    <div class="resizer" id="ws-resizer"></div>
 
                     <!-- Results Panel -->
                     <div class="glass-panel results-panel" id="results-panel">
@@ -885,6 +904,24 @@
                             <span id="results-count"
                                 style="font-size: 13px; color: var(--text-muted); font-weight: 400;"></span>
                         </div>
+
+                        <!-- Pagination Controls -->
+                        <div id="pagination-controls"
+                            style="display: none; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                            <div style="font-size: 13px; color: var(--text-muted);">
+                                Tổng số: <span id="total-rows-info" style="color: white; font-weight: bold;">0</span>
+                                bản ghi
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button class="btn-small" id="btn-prev-page" onclick="changePage(currentPage - 1)"><i
+                                        class="fa-solid fa-chevron-left"></i> Trang trước</button>
+                                <span style="font-size: 14px; font-weight: 500;">Trang <span
+                                        id="current-page-info">1</span> / <span id="total-pages-info">1</span></span>
+                                <button class="btn-small" id="btn-next-page" onclick="changePage(currentPage + 1)">Tiếp
+                                    theo <i class="fa-solid fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+
                         <div class="table-container" id="results-container">
                             <div class="empty-state" style="margin-top:20px;">
                                 <p>Không có dữ liệu hiển thị.</p>
@@ -1020,15 +1057,15 @@
                 document.body.style.userSelect = 'none'; // prevent text selection
             });
 
-            // Workspace horizontal resizer
+            // Workspace resizer
             const queryPanel = document.getElementById('query-panel');
-            const resizerH = document.getElementById('ws-resizer');
-            let isResizingH = false;
+            const resizerW = document.getElementById('ws-resizer');
+            let isResizingW = false;
 
-            resizerH.addEventListener('mousedown', (e) => {
-                isResizingH = true;
-                resizerH.classList.add('dragging');
-                document.body.style.cursor = 'row-resize';
+            resizerW.addEventListener('mousedown', (e) => {
+                isResizingW = true;
+                resizerW.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
                 document.body.style.userSelect = 'none';
             });
 
@@ -1039,12 +1076,11 @@
                         sidebar.style.width = newWidth + 'px';
                     }
                 }
-                if (isResizingH) {
-                    // Height based on top bounding client rect
-                    const topOffset = queryPanel.getBoundingClientRect().top;
-                    const newHeight = e.clientY - topOffset;
-                    if (newHeight > 150 && newHeight < window.innerHeight - 200) {
-                        queryPanel.style.height = newHeight + 'px';
+                if (isResizingW) {
+                    const leftOffset = queryPanel.getBoundingClientRect().left;
+                    const newWidth = e.clientX - leftOffset;
+                    if (newWidth > 250 && newWidth < window.innerWidth - 300) {
+                        queryPanel.style.width = newWidth + 'px';
                     }
                 }
             });
@@ -1054,9 +1090,9 @@
                     isResizingV = false;
                     resizerV.classList.remove('dragging');
                 }
-                if (isResizingH) {
-                    isResizingH = false;
-                    resizerH.classList.remove('dragging');
+                if (isResizingW) {
+                    isResizingW = false;
+                    resizerW.classList.remove('dragging');
                 }
                 document.body.style.cursor = 'default';
                 document.body.style.userSelect = 'auto';
@@ -1069,6 +1105,12 @@
         let currentColumns = [];
         let pendingEdits = {}; // Buffer for edits
         let currentRowIdModal = null; // for the modal only
+
+        // Pagination state
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalRows = 0;
+        const pageSize = 100;
 
         document.getElementById('sql-input').addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runQuery();
@@ -1143,15 +1185,18 @@
 
         function refreshTable() {
             if (currentTable) {
-                if (Object.keys(pendingEdits).length > 0 && !confirm("Có dữ liệu chưa lưu. Bạn có chắc muốn tải lại bảng?")) return;
-                selectTable(currentTable);
+                if (Object.keys(pendingEdits).length > 0 && !confirm("Có dữ liệu chưa lưu. Bạn có chắc muốn tải lại trang này?")) return;
+                selectTable(currentTable, null, currentPage);
             } else if (currentDb) {
                 fetchTables();
             }
         }
 
-        async function selectTable(table, element) {
+        async function selectTable(table, element = null, page = 1) {
             currentTable = table;
+            currentPage = page;
+            clearAlerts(); updateBreadcrumb();
+
             document.querySelectorAll('.table-list .list-item').forEach(el => el.classList.remove('active'));
             if (element) element.classList.add('active');
             else {
@@ -1160,29 +1205,54 @@
                 });
             }
 
-            updateBreadcrumb(); clearAlerts();
-            document.getElementById('sql-input').value = `SELECT * FROM "${table}" LIMIT 100`;
+            document.getElementById('sql-input').value = `SELECT * FROM "${table}" LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`;
             document.getElementById('results-container').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i></div>';
             document.getElementById('add-row-btn').style.display = 'none';
             document.getElementById('delete-selected-btn').style.display = 'none';
             document.getElementById('save-edits-btn').style.display = 'none';
+
             pendingEdits = {}; // reset pending edits
             updateEditCount();
 
             try {
-                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${table}`);
+                const res = await fetchWithAuth(`/api/database/${currentDb}/table/${table}?page=${page}&limit=${pageSize}`);
                 const data = await res.json();
+
                 if (data.error) throw new Error(data.error);
+                if (!res.ok) throw new Error(data.detail);
 
                 currentColumns = data.columns.filter(c => c !== '_rowid_');
                 document.getElementById('add-row-btn').style.display = 'inline-flex';
                 document.getElementById('delete-selected-btn').style.display = 'inline-flex';
                 updateSelectedCount();
+
+                totalRows = data.total_rows || 0;
+                totalPages = Math.ceil(totalRows / pageSize) || 1;
+
                 renderTable(data.columns, data.rows, true);
-            } catch (e) {
-                showError('Tải dữ liệu thất bại: ' + e.message);
+
+                // Update Pagination Controls
+                document.getElementById('pagination-controls').style.display = 'flex';
+                document.getElementById('total-rows-info').textContent = totalRows.toLocaleString();
+                document.getElementById('current-page-info').textContent = currentPage;
+                document.getElementById('total-pages-info').textContent = totalPages;
+
+                document.getElementById('btn-prev-page').disabled = currentPage <= 1;
+                document.getElementById('btn-next-page').disabled = currentPage >= totalPages;
+
+            } catch (err) {
+                showError('Tải dữ liệu thất bại: ' + err.message);
                 document.getElementById('results-container').innerHTML = '';
+                document.getElementById('pagination-controls').style.display = 'none';
             }
+        }
+
+        function changePage(newPage) {
+            if (newPage < 1 || newPage > totalPages) return;
+            if (Object.keys(pendingEdits).length > 0) {
+                if (!confirm("Bạn có thay đổi chưa lưu trên trang này. Chuyển trang sẽ làm mất thiết lập hiện tại. Bạn có chắc muốn chuyển?")) return;
+            }
+            selectTable(currentTable, null, newPage);
         }
 
         function focusQuery() {
@@ -1193,8 +1263,7 @@
             if (!currentDb) return showError('Chưa chọn DB.');
             const q = document.getElementById('sql-input').value.trim(); if (!q) return;
 
-            currentTable = null; updateBreadcrumb(); clearAlerts();
-            document.querySelectorAll('.table-list .list-item').forEach(el => el.classList.remove('active'));
+            clearAlerts();
             document.getElementById('add-row-btn').style.display = 'none';
             document.getElementById('delete-selected-btn').style.display = 'none';
             document.getElementById('save-edits-btn').style.display = 'none';
@@ -1388,6 +1457,52 @@
             }
             html += '</tbody></table>';
             document.getElementById('results-container').innerHTML = html;
+        }
+
+        /*********** AI TEXT-TO-SQL ***********/
+        async function generateSqlFromText() {
+            if (!currentDb) return showError('Chưa chọn DB.');
+            if (!currentTable) return showError('Vui lòng click chọn một Bảng (Table) ở cột menu bên trái trước khi dùng AI!');
+
+            const textInput = document.getElementById('ai-text-input');
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            const btn = document.getElementById('ai-gen-btn');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang nghĩ...';
+            btn.disabled = true;
+            document.getElementById('sql-input').value = 'Đang nhờ AI viết câu lệnh SQL. Lần gọi đầu tiên có thể tốn một lúc để tải Model...';
+
+            try {
+                const payload = { text };
+                if (currentTable) {
+                    payload.current_table = currentTable;
+                }
+
+                const res = await fetchWithAuth(`/api/database/${currentDb}/text-to-sql`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    if (res.status === 500) {
+                        throw new Error("Lỗi tải AI Model (Có thể lần đầu tải hơi lâu tầm vài chục giây, vui lòng thử lại sau): " + (data.detail || ""));
+                    }
+                    throw new Error(data.detail || 'Lỗi sinh SQL');
+                }
+
+                document.getElementById('sql-input').value = data.sql;
+                showSuccess("Đã sinh mã SQL thành công. Bạn có thể bấm Chạy Query.");
+            } catch (e) {
+                document.getElementById('sql-input').value = '';
+                showError(e.message);
+            } finally {
+                btn.innerHTML = orig;
+                btn.disabled = false;
+            }
         }
 
         /*********** EXPORT / DELETE DB ***********/

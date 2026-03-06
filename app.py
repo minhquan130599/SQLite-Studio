@@ -1,16 +1,32 @@
 import os
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["HF_HUB_DISABLE_EXPERIMENTAL_WARNING"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 import sqlite3
 import shutil
 import hashlib
 import jwt
+import logging
 from datetime import datetime, timedelta
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, status
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import uvicorn
+
+# Set up logging for text-to-sql init
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --- AI Text-to-SQL Variables ---
+# Lazyload these to save startup time
+ai_tokenizer = None
+ai_model = None
+ai_device = None
 
 SECRET_KEY = "super-secret-key-for-sqlite-studio"
 ALGORITHM = "HS256"
@@ -48,6 +64,10 @@ class BulkDeleteRequest(BaseModel):
 
 class BulkUpdateRequest(BaseModel):
     updates: List[Dict[str, Any]]
+
+class TextToSqlRequest(BaseModel):
+    text: str
+    current_table: Optional[str] = None
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -138,7 +158,7 @@ async def api_tables(db_name: str, username: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/database/{db_name}/table/{table_name}")
-async def api_table_data(db_name: str, table_name: str, username: str = Depends(get_current_user)):
+async def api_table_data(db_name: str, table_name: str, page: int = 1, limit: int = 100, username: str = Depends(get_current_user)):
     try:
         conn = get_db_connection(username, db_name)
         cursor = conn.cursor()
@@ -146,11 +166,15 @@ async def api_table_data(db_name: str, table_name: str, username: str = Depends(
         cursor.execute(f"PRAGMA table_info('{table_name}')")
         columns = [row['name'] for row in cursor.fetchall()]
         
-        cursor.execute(f"SELECT rowid as _rowid_, * FROM '{table_name}' LIMIT 100")
+        cursor.execute(f"SELECT COUNT(*) as count FROM '{table_name}'")
+        total_rows = cursor.fetchone()['count']
+        
+        offset = (page - 1) * limit
+        cursor.execute(f"SELECT rowid as _rowid_, * FROM '{table_name}' LIMIT ? OFFSET ?", (limit, offset))
         rows = [dict(row) for row in cursor.fetchall()]
         
         conn.close()
-        return {"columns": columns, "rows": rows}
+        return {"columns": columns, "rows": rows, "total_rows": total_rows, "page": page, "limit": limit}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -305,6 +329,120 @@ async def api_delete_database(db_name: str, username: str = Depends(get_current_
             raise e
         raise HTTPException(status_code=500, detail=f"Failed to delete database: {str(e)}")
 
+@app.post("/api/database/{db_name}/text-to-sql")
+async def api_text_to_sql(db_name: str, req: TextToSqlRequest, username: str = Depends(get_current_user)):
+    user_text = req.text
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Text query is required")
+        
+    global ai_tokenizer, ai_model, ai_device
+    
+    # 1. Lazy load Model
+    if ai_model is None:
+        try:
+            logger.info("Initializing HuggingFace Text-to-SQL Model. This may take a moment...")
+            from transformers import T5Tokenizer, T5ForConditionalGeneration
+            import torch
+            
+            ai_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            logger.info(f"Using device: {ai_device}")
+            
+            ai_tokenizer = T5Tokenizer.from_pretrained('t5-small')
+            ai_model = T5ForConditionalGeneration.from_pretrained('cssupport/t5-small-awesome-text-to-sql')
+            ai_model = ai_model.to(ai_device)
+            ai_model.eval()
+            logger.info("Text-to-SQL Model loaded successfully!")
+        except Exception as e:
+            logger.error(f"Failed to load AI model: {e}")
+            raise HTTPException(status_code=500, detail="Text-to-SQL AI Model failed to load on the server. Please check logs.")
+            
+    # 2. Translate text FIRST so we can use it to filter schema context
+    try:
+        import re
+        # Mask quoted strings to prevent translation
+        extracted_quotes = []
+        def replacer(match):
+            extracted_quotes.append(match.group(0))
+            return f'xyzquote{len(extracted_quotes)-1}xyz'
+            
+        text_masked = re.sub(r'\"(.*?)\"|\'(.*?)\'', replacer, req.text)
+
+        import deep_translator
+        translator = deep_translator.GoogleTranslator(source='auto', target='en')
+        translated_text = translator.translate(text_masked)
+        logger.info(f"Translated query (masked): {translated_text}")
+        
+        # Restore quotes
+        for i, q in enumerate(extracted_quotes):
+            # Sometimes deep_translator might lowercase the placeholder or add spaces, so case-insensitive replace
+            translated_text = re.sub(rf'(?i)xyzquote{i}xyz', q, translated_text)
+            
+        # Optional: Add heuristic for "any column" to explicitly help T5
+        translated_text = re.sub(r'(?i)\bin all columns\b', 'across all columns', translated_text)
+        translated_text = re.sub(r'(?i)\bin any column\b', 'across all columns', translated_text)
+        
+        # T5-small SQL hint keyword replacements (from Vietnamese translated english to exact SQL terms)
+        import re
+        translated_text = re.sub(r'(?i)\bsort\b', 'order by', translated_text)
+        translated_text = re.sub(r'(?i)\barrange\b', 'order by', translated_text)
+        translated_text = re.sub(r'(?i)\breturn\b', 'select *', translated_text)
+        translated_text = re.sub(r'(?i)\bshow\b', 'select *', translated_text)
+        translated_text = re.sub(r'(?i)\bget\b', 'select *', translated_text)
+        
+    except Exception as e:
+        logger.warning(f"Translation failed: {e}")
+        translated_text = req.text
+        
+    # 3. Extract DB Schema dynamically based on text keywords
+    try:
+        conn = get_db_connection(username, db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        all_tables = [row['name'] for row in cursor.fetchall()]
+        
+        schema_list = []
+        user_text_lower = req.text.lower()
+        translated_text_lower = translated_text.lower()
+        
+        for t_name in all_tables:
+            # Include table if it's the current table, OR if its name appears in the user's prompt
+            if (req.current_table and t_name == req.current_table) or (t_name.lower() in user_text_lower) or (t_name.lower() in translated_text_lower):
+                cursor.execute(f"PRAGMA table_info('{t_name}')")
+                cols = [c['name'] for c in cursor.fetchall()]
+                schema_list.append(f"CREATE TABLE {t_name} ({', '.join(cols)})")
+                
+        # Fallback if no tables matched: use all tables
+        if not schema_list:
+            for t_name in all_tables:
+                cursor.execute(f"PRAGMA table_info('{t_name}')")
+                cols = [c['name'] for c in cursor.fetchall()]
+                schema_list.append(f"CREATE TABLE {t_name} ({', '.join(cols)})")
+                
+        schema_str = " ".join(schema_list)
+        
+        # Explicit instruction trick for T5
+        if req.current_table:
+            translated_text += f" in table {req.current_table}"
+            
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read database schema: {e}")
+
+    try:
+        input_prompt = f"tables:\n{schema_str}\nquery for: {translated_text}"
+        print(f"--- Prompt ---\n{input_prompt}")
+        inputs = ai_tokenizer(input_prompt, padding=True, truncation=True, max_length=2048, return_tensors="pt").to(ai_device)
+        
+        import torch
+        with torch.no_grad():
+            outputs = ai_model.generate(**inputs, max_length=512)
+            
+        generated_sql = ai_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return {"sql": generated_sql}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
 @app.post("/api/database/{db_name}/query")
 async def api_query(db_name: str, data: QueryRequest, username: str = Depends(get_current_user)):
     query = data.query
@@ -340,4 +478,4 @@ async def api_export_database(db_name: str, username: str = Depends(get_current_
 
 if __name__ == '__main__':
     print("Starting Premium SQLite Studio with FastAPI...")
-    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
